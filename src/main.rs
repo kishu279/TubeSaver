@@ -1,6 +1,5 @@
-use std::path;
-
 use clap::{Arg, Command};
+use regex::Regex;
 
 fn main() {
     let matches = Command::new("TubeSaver")
@@ -29,7 +28,7 @@ fn main() {
         .arg(
             Arg::new("quality")
                 .short('q')
-                .long("quit")
+                .long("quality")
                 .default_value("1080p"),
         )
         .arg(
@@ -45,5 +44,16 @@ fn main() {
     let url = matches.get_one::<String>("url").unwrap();
     let mute = matches.get_flag("mute");
 
+    match extract_video_id(url) {
+        Some(video_id) => println!("Extracted video ID: {}", video_id),
+        None => println!("Could not extract video ID from the URL"),
+    }
+
     println!("Mode: {mode}, URL: {url}, Mute: {mute}");
+}
+
+fn extract_video_id(url: &str) -> Option<String> {
+    let re = Regex::new(r"(?i)(?:https?://(?:www\.)?youtube\.com/(?:[^/]+/.*?v=|(?:v|e(?:mbed)?|feeds/api/videos|user/[^/]+/videos|watch\?v=))|youtu\.be/)(?P<id>[a-zA-Z0-9_-]{11})").unwrap();
+    re.captures(url)
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }
