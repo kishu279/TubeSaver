@@ -1,9 +1,7 @@
+use anyhow::Result;
 use clap::{Arg, Command};
 use regex::Regex;
-use std::path::PathBuf;
-use yt_dlp::Youtube;
-use yt_dlp::fetcher::deps::Libraries;
-use anyhow::Result;
+use std::process::Command as ProcessCommand;
 
 fn main() {
     let matches = Command::new("TubeSaver")
@@ -56,14 +54,12 @@ fn main() {
 
     println!("Mode: {mode}, URL: {url}, Mute: {mute}");
 
-    //calling the download video function in rust
-    let _ = download_video(url.to_string());
-
     //calling the download from url function
     download_from_url(url.to_string()).expect("failed to download the data");
 
 }
 
+//function to extract the video id
 fn extract_video_id(url: &str) -> Option<String> {
     let re = Regex::new(r"(?i)(?:https?://(?:www\.)?youtube\.com/(?:[^/]+/.*?v=|(?:v|e(?:mbed)?|feeds/api/videos|user/[^/]+/videos|watch\?v=))|youtu\.be/)(?P<id>[a-zA-Z0-9_-]{11})").unwrap();
     re.captures(url)
@@ -71,83 +67,96 @@ fn extract_video_id(url: &str) -> Option<String> {
 }
 
 //this brings on asyncchronous operation in rust
-#[tokio::main]
-//creating a asyncchronous function to download the video
-pub async fn download_video(videourl: String) -> Result<(), Box<dyn std::error::Error>> {
-    // setting up the binaries for yt-dlp and ffmpeg
-    let executables_dir = PathBuf::from("libs");
-    let output_dir = PathBuf::from("downloads");
 
-    //downloading the binaries
-    let fetchervar = Youtube::with_new_binaries(&executables_dir, &output_dir).await?;
+// #[tokio::main]
+// //creating a asyncchronous function to download the video
+// pub async fn download_video(videourl: String) -> Result<(), Box<dyn std::error::Error>> {
+//     // setting up the binaries for yt-dlp and ffmpeg
+//     let executables_dir = PathBuf::from("libs");
+//     let output_dir = PathBuf::from("downloads");
 
-    //updating the binaries
-    fetchervar.update_downloader().await?;
+//     //downloading the binaries
+//     let fetchervar = Youtube::with_new_binaries(&executables_dir, &output_dir).await?;
 
-    //last try 
-   let (yt_dlp_name, ffmpeg_name) = ("yt-dlp", "ffmpeg");
-    
-    let youtube_path = executables_dir.join(yt_dlp_name);
-    let ffmpeg_path = executables_dir.join(ffmpeg_name);
-    
-    println!("Using yt-dlp at: {}", youtube_path.display());
-    println!("Using ffmpeg at: {}", ffmpeg_path.display());
-    //main data fetching logic
-    // let libraries_dir = PathBuf::from("libs");
-    // let output_dir = PathBuf::from("downloads");
+//     //updating the binaries
+//     fetchervar.update_downloader().await?;
 
-    // let youtube = libraries_dir.join("yt-dlp");
-    // let ffmpeg = libraries_dir.join("ffmpeg");
+//     //last try
+//     let (yt_dlp_name, ffmpeg_name) = ("yt-dlp", "ffmpeg");
 
-    let libraries = Libraries::new(youtube_path, ffmpeg_path);
+//     let youtube_path = executables_dir.join(yt_dlp_name);
+//     let ffmpeg_path = executables_dir.join(ffmpeg_name);
 
-    let fetcher = Youtube::new(libraries, output_dir)?;
+//     println!("Using yt-dlp at: {}", youtube_path.display());
+//     println!("Using ffmpeg at: {}", ffmpeg_path.display());
+//     //main data fetching logic
+//     // let libraries_dir = PathBuf::from("libs");
+//     // let output_dir = PathBuf::from("downloads");
 
-    //using the string
-    let url = String::from(videourl);
-    println!("the video url is : {}", url);
+//     // let youtube = libraries_dir.join("yt-dlp");
+//     // let ffmpeg = libraries_dir.join("ffmpeg");
 
-    //adding error too in this field ( have to add )
-    let video_path = fetcher.download_video_from_url(url, "video.mp4").await?; //pass the message to the user
-    println!("video successfully downloaded");
-    println!("path to video {}", video_path.to_string_lossy());
+//     let libraries = Libraries::new(youtube_path, ffmpeg_path);
 
-    Ok(())
-}
+//     let fetcher = Youtube::new(libraries, output_dir)?;
 
+//     //using the string
+//     let url = String::from(videourl);
+//     println!("the video url is : {}", url);
 
-//using 
-fn download_from_url (video_url : String)-> Result<()>{
+//     //adding error too in this field ( have to add )
+//     let video_path = fetcher.download_video_from_url(url, "video.mp4").await?; //pass the message to the user
+//     println!("video successfully downloaded");
+//     println!("path to video {}", video_path.to_string_lossy());
 
-  //creating the output directory
-    let output_template:&str ="downloads";
+//     Ok(())
+// }
+
+//using
+
+fn download_from_url(video_url: String) -> Result<(), Box<dyn std::error::Error>> {
+
+    //creating the output directory
+    let output_template: &str = "downloads";
     std::fs::create_dir_all(&output_template)?;
 
+    // let outputdir = "downloads";
     println!("Starting yt-dlp to download: {}", video_url);
 
+    //check if yt-dlp  is present
+    if !check_ytdlp_installed() {
+        return Err("yt-dlp not instaled".into());
+    }
+
     // Create and configure the command
-    let mut command = Command::new("yt-dlp");
+    let mut command = ProcessCommand::new("yt-dlp");
     command
         .arg("--output")
         .arg(output_template)
-        .arg("--format")
-        .arg("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]")
+        .arg("no-playlist")
+        .arg("mp4")
         .arg(video_url);
+  
+  // as child process to execute the system commands
+    let mut child = command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
 
-    // Run the command and wait for it to complete
-    let output = command.output()?;
 
-    // Check if the command was successful
-    if output.status.success() {
-        println!("yt-dlp command ran successfully!");
-        println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
-    } else {
-        eprintln!("yt-dlp command failed with an error!");
-        eprintln!("status: {}", output.status);
-        eprintln!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+    //wait for the process to complete
+    let status = child.wait();
+
+
+    //check for success
+    if status?.success() {
+    println!("Download successfull")
     }
-
-//once completed delete the download folder
+    else{
+    eprintln!("Download failed")
+    }
+    
+    
     Ok(())
 }
 
