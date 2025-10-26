@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Arg, Command};
 use regex::Regex;
 use std::process::Command as ProcessCommand;
+use std::error::Error;
 
 fn main() {
     let matches = Command::new("TubeSaver")
@@ -56,7 +57,6 @@ fn main() {
 
     //calling the download from url function
     download_from_url(url.to_string()).expect("failed to download the data");
-
 }
 
 //function to extract the video id
@@ -113,41 +113,88 @@ fn extract_video_id(url: &str) -> Option<String> {
 // }
 
 //using
-#[tokio::main]
-async fn download_from_url(video_url: String) -> Result<(), Box<dyn std::error::Error>> {
 
-    //creating the output directory
-    let output_template = "downloads/%(title)s.%(ext)s";
-    std::fs::create_dir_all(&output_template)?;
+// fn download_from_url(video_url: String) -> Result<(), Box<dyn std::error::Error>> {
+//     //creating the output directory
 
-    // let outputdir = "downloads";
+//     let output_template = "downloads/%(title)s.%(ext)s";
+//     std::fs::create_dir_all(&output_template)?;
+
+//     // let outputdir = "downloads";
+//     println!("Starting yt-dlp to download: {}", video_url);
+
+//     //check if yt-dlp  is present
+//     if !check_ytdlp_installed() {
+//         return Err("yt-dlp not instaled".into());
+//     }
+
+//     // Create and configure the command
+//     let mut command = ProcessCommand::new("yt-dlp");
+//     command
+//         .arg("-o")
+//         .arg(output_template)
+//         .arg("--no-playlist")
+//         .arg("mp4")
+//         .arg(video_url);
+
+//     // as child process to execute the system commands
+//     let output = command.output()?;
+
+//     //check for success
+//     if output.status.success() {
+//         println!("Download successfull")
+//     } else {
+//         eprintln!("Download failed")
+//     }
+
+//     Ok(())
+// }
+
+// fn check_ytdlp_installed() -> bool {
+//     ProcessCommand::new("yt-dlp")
+//         .arg("--version")
+//         .output()
+//         .map(|output| output.status.success())
+//         .unwrap_or(false)
+// }
+
+fn download_from_url(video_url: String) -> Result<(), Box<dyn Error>> {
+    // Create output directory
+    let output_dir = "downloads";
+    std::fs::create_dir_all(output_dir)?;
+
+    // Define output file template
+    let output_template = format!("{}/%(title)s.%(ext)s", output_dir);
     println!("Starting yt-dlp to download: {}", video_url);
 
-    //check if yt-dlp  is present
+    // Check if yt-dlp is installed
     if !check_ytdlp_installed() {
-        return Err("yt-dlp not instaled".into());
+        return Err("yt-dlp not installed".into());
     }
 
-    // Create and configure the command
+    // Build command
     let mut command = ProcessCommand::new("yt-dlp");
     command
         .arg("-o")
-        .arg(output_template)
+        .arg(&output_template)
         .arg("--no-playlist")
+        .arg("-f")
         .arg("mp4")
-        .arg(video_url);
-  
-  // as child process to execute the system commands
-    let output  = command.output()?;
+        .arg(&video_url);
 
-    //check for success
+    // Execute command
+    let output = command.output()?;
+
+    // Log results
+    println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+
     if output.status.success() {
-    println!("Download successfull")
+        println!("✅ Download successful");
+    } else {
+        eprintln!("❌ Download failed");
     }
-    else{
-    eprintln!("Download failed")
-    }
-    
+
     Ok(())
 }
 
