@@ -113,11 +113,11 @@ fn extract_video_id(url: &str) -> Option<String> {
 // }
 
 //using
-
-fn download_from_url(video_url: String) -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn download_from_url(video_url: String) -> Result<(), Box<dyn std::error::Error>> {
 
     //creating the output directory
-    let output_template: &str = "downloads";
+    let output_template = "downloads/%(title)s.%(ext)s";
     std::fs::create_dir_all(&output_template)?;
 
     // let outputdir = "downloads";
@@ -131,31 +131,22 @@ fn download_from_url(video_url: String) -> Result<(), Box<dyn std::error::Error>
     // Create and configure the command
     let mut command = ProcessCommand::new("yt-dlp");
     command
-        .arg("--output")
+        .arg("-o")
         .arg(output_template)
-        .arg("no-playlist")
+        .arg("--no-playlist")
         .arg("mp4")
         .arg(video_url);
   
   // as child process to execute the system commands
-    let mut child = command
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()?;
-
-
-    //wait for the process to complete
-    let status = child.wait();
-
+    let output  = command.output()?;
 
     //check for success
-    if status?.success() {
+    if output.status.success() {
     println!("Download successfull")
     }
     else{
     eprintln!("Download failed")
     }
-    
     
     Ok(())
 }
