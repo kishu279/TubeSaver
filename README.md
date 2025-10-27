@@ -2,7 +2,7 @@
 
 **TubeSaver** is a simple, command-line tool written in Rust for downloading YouTube videos in various formats, qualities, and audio-only options. The tool supports downloading with customizable settings such as quality, codec and path location .
 
-![steps](./steps.png)
+<img width="1341" height="701" alt="Screenshot 2025-10-27 at 8 14 15 AM" src="https://github.com/user-attachments/assets/0c0240e2-d77f-4e93-9097-5f5ad53713e6" />
 
 ---
 
