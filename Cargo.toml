@@ -1,7 +1,16 @@
 [package]
 name = "yt-video-downloader"
 version = "0.1.0"
+authors = ["Subhajit Chaudhury <subhajitchaudhury05@gmail.com>"]
 edition = "2024"
+description = "A Rust-based command-line YouTube downloader that lets you easily save videos or audio in multiple formats. Fast, efficient, and easy to use on any platform."
+license = "MIT"
+repository = "https://github.com/subhdotsol/TubeSaver"
+readme = "README.md"
+keywords = ["youtube", "video-downloader", "cli", "audio", "media"]
+
+categories = ["command-line-utilities", "multimedia", "network-programming"]
+
 
 [dependencies]
 anyhow = "1.0.100"
