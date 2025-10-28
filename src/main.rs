@@ -243,10 +243,10 @@ async fn upload_to_gdrive(file_path: String) -> Result<(), Box<dyn Error>> {
     let tokens_path = format!("{}/.tubesaver/tokens.json", home);
 
     let secret = yup_oauth2::read_application_secret(&oauth_path).await?;
-    let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::Interactive)
-        .persist_tokens_to_disk(&tokens_path)
-        .build()
-        .await?;
+    // let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::Interactive)
+    //     .persist_tokens_to_disk(&tokens_path)
+    //     .build()
+    //     .await?;
 
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
         .build(
@@ -257,6 +257,11 @@ async fn upload_to_gdrive(file_path: String) -> Result<(), Box<dyn Error>> {
                 .enable_http1()
                 .build(),
         );
+
+    let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
+        .persist_tokens_to_disk(&tokens_path)
+        .build()
+        .await?;
 
     let hub = DriveHub::new(client, auth);
 
