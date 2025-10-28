@@ -1,10 +1,15 @@
-use anyhow::Result;
 use clap::{Arg, Command};
+extern crate google_drive3 as drive3;
+use drive3::{DriveHub, api::File as DriveFile, hyper_rustls, hyper_util, yup_oauth2};
 use regex::Regex;
-use std::process::Command as ProcessCommand;
 use std::error::Error;
+use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
+use walkdir::WalkDir;
+use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let matches = Command::new("TubeSaver")
         .version("1.0")
         .about("Download YouTube videos easily")
@@ -19,7 +24,7 @@ fn main() {
             Arg::new("url")
                 .short('u')
                 .long("url")
-                .required(true)
+                // .required(true)
                 .help("YouTube video URL"),
         )
         .arg(
@@ -41,22 +46,48 @@ fn main() {
                 .num_args(0)
                 .help("mute audio"),
         )
+        .arg(
+            Arg::new("upload")
+                .short('g')
+                .long("g-upload")
+                .num_args(0)
+                .help("upload folder on google drive"),
+        )
+        // .arg(Arg::new("download").short('d').long("gdrive-download"))
         .get_matches();
 
-    let mode = matches.get_one::<String>("mode").unwrap();
-    let url = matches.get_one::<String>("url").unwrap();
+    let mode = matches
+        .get_one::<String>("mode")
+        .map(|s| s.as_str())
+        .unwrap_or("video");
     let mute = matches.get_flag("mute");
+    let url = matches.get_one::<String>("url");
+    let upload = matches.get_flag("upload");
+    let path = matches.get_one::<String>("path").map(|p| p.as_str());
     // creating variable for retreving video id further
     let mut _video_id = String::new();
-    match extract_video_id(url) {
-        Some(video_id) => println!("Extracted video ID: {video_id}"),
-        None => println!("Could not extract video ID from the URL"),
+
+    if upload == true
+        && mute == false
+        && let Some(path) = path
+    {
+        println!("Uploading to Google Drive");
+        // upload_to_gdrive(url.to_string()).expect("failed to upload the data");
+        upload_to_gdrive(path.to_string())
+            .await
+            .expect("failed to upload the file");
+    } else if let Some(url) = url {
+        match extract_video_id(url) {
+            Some(video_id) => println!("Extracted video ID: {video_id}"),
+            None => println!("Could not extract video ID from the URL"),
+        }
+        println!("Mode: {mode}, URL: {url}, Mute: {mute}");
+        //calling the download from url function
+        download_from_url(url.to_string()).expect("failed to download the data");
+    } else {
+        println!("Add an URL or a path to download / upload");
+        return;
     }
-
-    println!("Mode: {mode}, URL: {url}, Mute: {mute}");
-
-    //calling the download from url function
-    download_from_url(url.to_string()).expect("failed to download the data");
 }
 
 //function to extract the video id
@@ -204,4 +235,68 @@ fn check_ytdlp_installed() -> bool {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)
+}
+
+async fn upload_to_gdrive(file_path: String) -> Result<(), Box<dyn Error>> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let oauth_path = format!("{}/.tubesaver/google_oauth.json", home);
+    let tokens_path = format!("{}/.tubesaver/tokens.json", home);
+
+    let secret = yup_oauth2::read_application_secret(&oauth_path).await?;
+    let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::Interactive)
+        .persist_tokens_to_disk(&tokens_path)
+        .build()
+        .await?;
+
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build(
+            hyper_rustls::HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .unwrap()
+                .https_or_http()
+                .enable_http1()
+                .build(),
+        );
+
+    let hub = DriveHub::new(client, auth);
+
+    let path = Path::new(&file_path);
+    if path.is_dir() {
+        println!("📁 Uploading directory: {}", path.display());
+        for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
+            if entry.file_type().is_file() {
+                upload_file(&hub, &entry.path().to_path_buf())
+                    .await
+                    .expect("failed to upload file");
+            }
+        }
+    } else if path.is_file() {
+        println!("📄 Uploading file: {}", path.display());
+        upload_file(&hub, &path.to_path_buf()).await?;
+    } else {
+        return Err(format!("Path not found or invalid: {}", file_path).into());
+    }
+
+    Ok(())
+}
+
+async fn upload_file<T>(hub: &DriveHub<T>, path: &PathBuf) -> Result<(), Box<dyn Error>>
+where
+    T: 'static + Send + Sync + Clone + hyper_util::client::legacy::connect::Connect,
+{
+    let file_name = path.file_name().unwrap().to_string_lossy().to_string();
+    let file = std::fs::File::open(path)?;
+
+    let metadata = DriveFile {
+        name: Some(file_name),
+        ..Default::default()
+    };
+    let (_response, _res) = hub
+        .files()
+        .create(metadata)
+        .upload(file, "application/octet-stream".parse()?)
+        .await?;
+
+    println!("✅ Uploaded: {}", path.display());
+    Ok(())
 }
